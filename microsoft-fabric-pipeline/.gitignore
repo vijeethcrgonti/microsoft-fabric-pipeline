@@ -1,0 +1,12 @@
+.env
+*.pyc
+__pycache__/
+.pytest_cache/
+.venv/
+*.egg-info/
+coverage.xml
+.coverage
+spark-warehouse/
+derby.log
+infrastructure/bicep/*.json
+!infrastructure/bicep/parameters.*.json

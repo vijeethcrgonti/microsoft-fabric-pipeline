@@ -1,0 +1,154 @@
+name: Fabric Pipeline CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.11"
+  AZURE_REGION: eastus2
+
+jobs:
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Java (PySpark)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "11"
+          distribution: temurin
+
+      - name: Install dependencies
+        run: pip install pyspark==3.5.0 delta-spark==3.0.0 pytest pytest-cov
+
+      - name: Run unit tests
+        run: pytest tests/unit/ -v --tb=short --cov=notebooks --cov-report=xml
+
+      - uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install ruff black
+      - run: ruff check notebooks/ scripts/ tests/
+      - run: black --check notebooks/ scripts/ tests/
+
+  validate-bicep:
+    name: Validate Bicep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Validate Bicep template
+        run: |
+          az deployment group validate \
+            --resource-group rg-fabric-pipeline-dev \
+            --template-file infrastructure/bicep/main.bicep \
+            --parameters environment=dev fabricAdminEmail=admin@example.com \
+                         sqlAdminLogin=sqladmin sqlAdminPassword=TempPass123!
+
+  deploy-infra:
+    name: Deploy Infrastructure
+    needs: [test, lint, validate-bicep]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Deploy Bicep
+        run: |
+          az deployment group create \
+            --resource-group rg-fabric-pipeline-dev \
+            --template-file infrastructure/bicep/main.bicep \
+            --parameters environment=dev \
+                         fabricAdminEmail=${{ secrets.FABRIC_ADMIN_EMAIL }} \
+                         sqlAdminLogin=${{ secrets.SQL_ADMIN_LOGIN }} \
+                         sqlAdminPassword=${{ secrets.SQL_ADMIN_PASSWORD }}
+
+  deploy-notebooks:
+    name: Deploy Notebooks to Fabric
+    needs: deploy-infra
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install msal requests
+      - name: Deploy notebooks
+        run: |
+          python scripts/deploy_notebooks.py \
+            --workspace-id ${{ secrets.FABRIC_WORKSPACE_ID }} \
+            --force
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+
+  trigger-pipeline:
+    name: Trigger Fabric Pipeline
+    needs: deploy-notebooks
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install msal requests
+      - name: Trigger and wait for pipeline
+        run: |
+          python scripts/trigger_pipeline.py \
+            --workspace-id ${{ secrets.FABRIC_WORKSPACE_ID }} \
+            --pipeline orchestrate_daily \
+            --wait
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+
+  validate:
+    name: Validate Lakehouse Data
+    needs: trigger-pipeline
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install pyodbc msal
+      - name: Run data quality checks
+        run: |
+          python scripts/validate_lakehouse.py \
+            --workspace-id ${{ secrets.FABRIC_WORKSPACE_ID }} \
+            --lakehouse-id ${{ secrets.FABRIC_LAKEHOUSE_ID }}
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
