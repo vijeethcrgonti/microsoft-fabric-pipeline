@@ -9,6 +9,7 @@ from datetime import date, datetime
 import pytest
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
+from decimal import Decimal
 from pyspark.sql.types import (
     DateType,
     DecimalType,
@@ -53,7 +54,7 @@ def bronze_orders(spark):
             "STR-1",
             "PRD-1",
             2,
-            50.00,
+            Decimal("50.00"),
             100.00,
             date(2024, 1, 15),
             "completed",
@@ -65,7 +66,7 @@ def bronze_orders(spark):
             "STR-1",
             "PRD-1",
             2,
-            50.00,
+            Decimal("50.00"),
             100.00,
             date(2024, 1, 15),
             "completed",
@@ -217,10 +218,10 @@ class TestGoldAggregations:
                 "O3",
                 date(2024, 1, 15),
                 "South",
-                50.00,
+                Decimal("50.00"),
                 "CANCELLED",
             ),  # should be excluded
-            ("O4", date(2024, 1, 15), "North", 300.00, "COMPLETED"),
+            ("O4", date(2024, 1, 15), "North", Decimal("300.00"), "COMPLETED"),
         ]
         df = spark.createDataFrame(data, schema)
 
@@ -234,7 +235,7 @@ class TestGoldAggregations:
         )
 
         south = result.filter(F.col("region") == "South").collect()[0]
-        assert float(south["total_revenue"]) == 300.00
+        assert float(south["total_revenue"]) == Decimal("300.00")
         assert south["total_orders"] == 2
 
     def test_ltv_tiers_assigned(self, spark):
@@ -247,12 +248,12 @@ class TestGoldAggregations:
         data = [
             ("CUST-1", 6000.00),  # Platinum
             ("CUST-2", 1500.00),  # Gold
-            ("CUST-3", 300.00),  # Silver
-            ("CUST-4", 50.00),  # Bronze
+            ("CUST-3", Decimal("300.00")),  # Silver
+            ("CUST-4", Decimal("50.00")),  # Bronze
         ]
         df = spark.createDataFrame(data, schema).withColumn(
             "ltv_tier",
-            F.when(F.col("lifetime_value") >= 5000, "Platinum")
+            F.when(F.col("lifetime_value") >= Decimal("5000"), "Platinum")
             .when(F.col("lifetime_value") >= 1000, "Gold")
             .when(F.col("lifetime_value") >= 200, "Silver")
             .otherwise("Bronze"),

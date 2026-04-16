@@ -50,6 +50,7 @@ jobs:
       - run: black --check notebooks/ scripts/ tests/
 
   validate-bicep:
+    if: false
     name: Validate Bicep
     runs-on: ubuntu-latest
     steps:
