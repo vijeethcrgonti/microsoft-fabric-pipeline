@@ -9,7 +9,7 @@ Run in Fabric Spark environment — notebookutils available natively.
 """
 
 import hashlib
-from datetime import datetime, date
+from datetime import datetime
 
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql import functions as F
@@ -31,44 +31,53 @@ from delta.tables import DeltaTable
 # ── Configuration ──────────────────────────────────────────────────────────────
 
 LAKEHOUSE_NAME = "retail_lakehouse"
-BRONZE_BASE = f"abfss://retail_lakehouse@onelake.dfs.fabric.microsoft.com/Tables"
-SILVER_BASE = f"abfss://retail_lakehouse@onelake.dfs.fabric.microsoft.com/Tables"
+BRONZE_BASE = "abfss://retail_lakehouse@onelake.dfs.fabric.microsoft.com/Tables"
+SILVER_BASE = "abfss://retail_lakehouse@onelake.dfs.fabric.microsoft.com/Tables"
 
 RUN_DATE = datetime.utcnow().strftime("%Y-%m-%d")
 
 # ── Spark session (auto-created in Fabric; explicit for local testing) ──────────
 
-spark = SparkSession.builder \
-    .appName("bronze-to-silver") \
-    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
-    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
+spark = (
+    SparkSession.builder.appName("bronze-to-silver")
+    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+    .config(
+        "spark.sql.catalog.spark_catalog",
+        "org.apache.spark.sql.delta.catalog.DeltaCatalog",
+    )
     .getOrCreate()
+)
 
 spark.conf.set("spark.sql.shuffle.partitions", "16")
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
 
-SILVER_ORDERS_SCHEMA = StructType([
-    StructField("order_id",         StringType(),       nullable=False),
-    StructField("customer_id_hash", StringType(),       nullable=False),
-    StructField("store_id",         StringType(),       nullable=True),
-    StructField("product_id",       StringType(),       nullable=True),
-    StructField("quantity",         IntegerType(),      nullable=True),
-    StructField("unit_price",       DecimalType(10, 2), nullable=True),
-    StructField("order_amount",     DecimalType(12, 2), nullable=False),
-    StructField("order_date",       DateType(),         nullable=False),
-    StructField("status",           StringType(),       nullable=True),
-    StructField("order_year",       IntegerType(),      nullable=True),
-    StructField("order_month",      IntegerType(),      nullable=True),
-    StructField("_ingested_at",     TimestampType(),    nullable=True),
-    StructField("_processed_at",    TimestampType(),    nullable=True),
-])
+SILVER_ORDERS_SCHEMA = StructType(
+    [
+        StructField("order_id", StringType(), nullable=False),
+        StructField("customer_id_hash", StringType(), nullable=False),
+        StructField("store_id", StringType(), nullable=True),
+        StructField("product_id", StringType(), nullable=True),
+        StructField("quantity", IntegerType(), nullable=True),
+        StructField("unit_price", DecimalType(10, 2), nullable=True),
+        StructField("order_amount", DecimalType(12, 2), nullable=False),
+        StructField("order_date", DateType(), nullable=False),
+        StructField("status", StringType(), nullable=True),
+        StructField("order_year", IntegerType(), nullable=True),
+        StructField("order_month", IntegerType(), nullable=True),
+        StructField("_ingested_at", TimestampType(), nullable=True),
+        StructField("_processed_at", TimestampType(), nullable=True),
+    ]
+)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+
 def sha256_udf(col_name: str):
-    return F.udf(lambda v: hashlib.sha256(v.encode()).hexdigest() if v else None)(F.col(col_name))
+    return F.udf(lambda v: hashlib.sha256(v.encode()).hexdigest() if v else None)(
+        F.col(col_name)
+    )
 
 
 def log(msg: str):
@@ -76,6 +85,7 @@ def log(msg: str):
 
 
 # ── Bronze → Silver: Orders ────────────────────────────────────────────────────
+
 
 def transform_orders(run_date: str) -> DataFrame:
     log("Reading bronze_orders...")
@@ -104,18 +114,21 @@ def transform_orders(run_date: str) -> DataFrame:
 
     # 3. Type casting + normalization
     df = (
-        df.withColumn("order_amount", F.round(F.col("order_amount").cast(DecimalType(12, 2)), 2))
-        .withColumn("unit_price", F.round(F.col("unit_price").cast(DecimalType(10, 2)), 2))
+        df.withColumn(
+            "order_amount", F.round(F.col("order_amount").cast(DecimalType(12, 2)), 2)
+        )
+        .withColumn(
+            "unit_price", F.round(F.col("unit_price").cast(DecimalType(10, 2)), 2)
+        )
         .withColumn("quantity", F.col("quantity").cast(IntegerType()))
         .withColumn("order_date", F.col("order_date").cast(DateType()))
         .withColumn("status", F.upper(F.trim(F.col("status"))))
     )
 
     # 4. PII masking — SHA-256 customer_id
-    df = (
-        df.withColumn("customer_id_hash", sha256_udf("customer_id"))
-        .drop("customer_id", "email", "phone_number")  # drop raw PII
-    )
+    df = df.withColumn("customer_id_hash", sha256_udf("customer_id")).drop(
+        "customer_id", "email", "phone_number"
+    )  # drop raw PII
 
     # 5. Derived columns
     df = (
@@ -144,8 +157,7 @@ def write_silver_orders(df: DataFrame, run_date: str):
     else:
         log("Creating silver_orders Delta table (first run)...")
         (
-            df.write
-            .format("delta")
+            df.write.format("delta")
             .mode("overwrite")
             .partitionBy("order_year", "order_month")
             .option("overwriteSchema", "true")
@@ -157,6 +169,7 @@ def write_silver_orders(df: DataFrame, run_date: str):
 
 # ── Bronze → Silver: Products ──────────────────────────────────────────────────
 
+
 def transform_products() -> DataFrame:
     log("Reading bronze_products...")
     df = spark.read.format("delta").load(f"{BRONZE_BASE}/bronze_products")
@@ -165,8 +178,12 @@ def transform_products() -> DataFrame:
         df.filter(F.col("product_id").isNotNull())
         .filter(F.col("product_name").isNotNull())
         .dropDuplicates(["product_id"])
-        .withColumn("unit_cost", F.round(F.col("unit_cost").cast(DecimalType(10, 2)), 2))
-        .withColumn("list_price", F.round(F.col("list_price").cast(DecimalType(10, 2)), 2))
+        .withColumn(
+            "unit_cost", F.round(F.col("unit_cost").cast(DecimalType(10, 2)), 2)
+        )
+        .withColumn(
+            "list_price", F.round(F.col("list_price").cast(DecimalType(10, 2)), 2)
+        )
         .withColumn("category", F.upper(F.trim(F.col("category"))))
         .withColumn("is_active", F.col("status") == "ACTIVE")
         .withColumn("_processed_at", F.current_timestamp())
@@ -178,8 +195,7 @@ def transform_products() -> DataFrame:
 
 def write_silver_products(df: DataFrame):
     (
-        df.write
-        .format("delta")
+        df.write.format("delta")
         .mode("overwrite")
         .option("overwriteSchema", "true")
         .save(f"{SILVER_BASE}/silver_products")

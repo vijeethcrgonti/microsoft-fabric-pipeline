@@ -39,10 +39,14 @@ def get_pipeline_id(workspace_id: str, pipeline_name: str, token: str) -> str:
     for item in resp.json().get("value", []):
         if item["displayName"] == pipeline_name:
             return item["id"]
-    raise ValueError(f"Pipeline '{pipeline_name}' not found in workspace {workspace_id}")
+    raise ValueError(
+        f"Pipeline '{pipeline_name}' not found in workspace {workspace_id}"
+    )
 
 
-def trigger_pipeline(workspace_id: str, pipeline_id: str, token: str, parameters: dict | None = None) -> str:
+def trigger_pipeline(
+    workspace_id: str, pipeline_id: str, token: str, parameters: dict | None = None
+) -> str:
     url = f"{FABRIC_API_BASE}/workspaces/{workspace_id}/dataPipelines/{pipeline_id}/jobs/instances?jobType=Pipeline"
     payload = {}
     if parameters:
@@ -50,7 +54,10 @@ def trigger_pipeline(workspace_id: str, pipeline_id: str, token: str, parameters
 
     resp = requests.post(
         url,
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
         json=payload,
     )
     resp.raise_for_status()
@@ -59,7 +66,9 @@ def trigger_pipeline(workspace_id: str, pipeline_id: str, token: str, parameters
     return run_id
 
 
-def poll_run_status(workspace_id: str, pipeline_id: str, run_id: str, token: str, timeout: int = 3600) -> str:
+def poll_run_status(
+    workspace_id: str, pipeline_id: str, run_id: str, token: str, timeout: int = 3600
+) -> str:
     url = f"{FABRIC_API_BASE}/workspaces/{workspace_id}/dataPipelines/{pipeline_id}/jobs/instances/{run_id}"
     headers = {"Authorization": f"Bearer {token}"}
     elapsed = 0
@@ -88,7 +97,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--workspace-id", required=True)
     parser.add_argument("--pipeline", required=True, help="Pipeline display name")
-    parser.add_argument("--params", default=None, help="JSON string of pipeline parameters")
+    parser.add_argument(
+        "--params", default=None, help="JSON string of pipeline parameters"
+    )
     parser.add_argument("--wait", action="store_true", help="Wait for completion")
     args = parser.parse_args()
 

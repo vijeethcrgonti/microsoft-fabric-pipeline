@@ -24,8 +24,8 @@ FABRIC_SCOPE = "https://api.fabric.microsoft.com/.default"
 
 NOTEBOOKS = [
     {"name": "bronze_to_silver", "path": "notebooks/bronze_to_silver.py"},
-    {"name": "silver_to_gold",   "path": "notebooks/silver_to_gold.py"},
-    {"name": "utils",            "path": "notebooks/utils.py"},
+    {"name": "silver_to_gold", "path": "notebooks/silver_to_gold.py"},
+    {"name": "utils", "path": "notebooks/utils.py"},
 ]
 
 
@@ -47,10 +47,7 @@ def list_existing_notebooks(workspace_id: str, token: str) -> dict[str, str]:
     headers = {"Authorization": f"Bearer {token}"}
     resp = requests.get(url, headers=headers)
     resp.raise_for_status()
-    return {
-        item["displayName"]: item["id"]
-        for item in resp.json().get("value", [])
-    }
+    return {item["displayName"]: item["id"] for item in resp.json().get("value", [])}
 
 
 def encode_notebook(file_path: str) -> str:
@@ -61,7 +58,11 @@ def encode_notebook(file_path: str) -> str:
         "nbformat": 4,
         "nbformat_minor": 5,
         "metadata": {
-            "kernelspec": {"display_name": "PySpark", "language": "python", "name": "synapse_pyspark"},
+            "kernelspec": {
+                "display_name": "PySpark",
+                "language": "python",
+                "name": "synapse_pyspark",
+            },
             "language_info": {"name": "python"},
         },
         "cells": [
@@ -77,7 +78,9 @@ def encode_notebook(file_path: str) -> str:
     return base64.b64encode(json.dumps(notebook_json).encode()).decode()
 
 
-def create_notebook(workspace_id: str, name: str, encoded_content: str, token: str) -> str:
+def create_notebook(
+    workspace_id: str, name: str, encoded_content: str, token: str
+) -> str:
     url = f"{FABRIC_API_BASE}/workspaces/{workspace_id}/notebooks"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -101,7 +104,9 @@ def create_notebook(workspace_id: str, name: str, encoded_content: str, token: s
 
     # Fabric API returns 202 Accepted with operation URL for long-running ops
     if resp.status_code == 202:
-        operation_url = resp.headers.get("Location") or resp.headers.get("x-ms-operation-id")
+        operation_url = resp.headers.get("Location") or resp.headers.get(
+            "x-ms-operation-id"
+        )
         logger.info(f"Create operation in progress: {operation_url}")
         item_id = poll_operation(operation_url, token)
     else:
@@ -111,7 +116,9 @@ def create_notebook(workspace_id: str, name: str, encoded_content: str, token: s
     return item_id
 
 
-def update_notebook(workspace_id: str, item_id: str, name: str, encoded_content: str, token: str):
+def update_notebook(
+    workspace_id: str, item_id: str, name: str, encoded_content: str, token: str
+):
     url = f"{FABRIC_API_BASE}/workspaces/{workspace_id}/notebooks/{item_id}/updateDefinition"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -168,7 +175,9 @@ def deploy_all(workspace_id: str, token: str, force_update: bool = False):
         encoded = encode_notebook(path)
 
         if name in existing and not force_update:
-            logger.info(f"Notebook '{name}' already exists — skipping (use --force to update)")
+            logger.info(
+                f"Notebook '{name}' already exists — skipping (use --force to update)"
+            )
         elif name in existing:
             update_notebook(workspace_id, existing[name], name, encoded, token)
         else:
@@ -178,7 +187,9 @@ def deploy_all(workspace_id: str, token: str, force_update: bool = False):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--workspace-id", required=True)
-    parser.add_argument("--force", action="store_true", help="Force update existing notebooks")
+    parser.add_argument(
+        "--force", action="store_true", help="Force update existing notebooks"
+    )
     args = parser.parse_args()
 
     tenant_id = os.environ["AZURE_TENANT_ID"]

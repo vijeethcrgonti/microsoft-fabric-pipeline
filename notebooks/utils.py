@@ -26,7 +26,9 @@ def log(msg: str):
 
 def sha256_col(col_name: str):
     """Returns a SHA-256 hashed column expression."""
-    return F.udf(lambda v: hashlib.sha256(v.encode()).hexdigest() if v else None)(F.col(col_name))
+    return F.udf(lambda v: hashlib.sha256(v.encode()).hexdigest() if v else None)(
+        F.col(col_name)
+    )
 
 
 def count_log(df: DataFrame, label: str) -> DataFrame:
@@ -36,9 +38,12 @@ def count_log(df: DataFrame, label: str) -> DataFrame:
     return df
 
 
-def deduplicate(df: DataFrame, partition_cols: list[str], order_col: str = "created_at") -> DataFrame:
+def deduplicate(
+    df: DataFrame, partition_cols: list[str], order_col: str = "created_at"
+) -> DataFrame:
     """Keep the latest record per partition key using row_number."""
     from pyspark.sql.window import Window
+
     window = Window.partitionBy(*partition_cols).orderBy(F.col(order_col).desc())
     return (
         df.withColumn("_rn", F.row_number().over(window))
@@ -112,7 +117,9 @@ def delta_merge(
         log(f"Created Delta table → {target_path}")
 
 
-def optimize_table(spark: SparkSession, table_path: str, z_order_cols: list[str] | None = None):
+def optimize_table(
+    spark: SparkSession, table_path: str, z_order_cols: list[str] | None = None
+):
     """Run OPTIMIZE + VACUUM on a Delta table."""
     z_order = f"ZORDER BY ({', '.join(z_order_cols)})" if z_order_cols else ""
     spark.sql(f"OPTIMIZE delta.`{table_path}` {z_order}")
@@ -136,6 +143,7 @@ def get_delta_stats(spark: SparkSession, table_path: str) -> dict:
 def run_with_retry(fn: Callable, retries: int = 3, delay_seconds: int = 5):
     """Run a function with retry on exception."""
     import time
+
     for attempt in range(1, retries + 1):
         try:
             return fn()

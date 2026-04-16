@@ -125,8 +125,12 @@ def run_all_checks(workspace_id: str, lakehouse_id: str) -> bool:
     for check in CHECKS:
         try:
             passed, value = run_check(cursor, check)
-            status = "✅ PASS" if passed else ("❌ FAIL" if check.critical else "⚠️ WARN")
-            logger.info(f"{status}  [{check.name}]  value={value:.4f}  threshold={check.threshold} ({check.operator})")
+            status = (
+                "✅ PASS" if passed else ("❌ FAIL" if check.critical else "⚠️ WARN")
+            )
+            logger.info(
+                f"{status}  [{check.name}]  value={value:.4f}  threshold={check.threshold} ({check.operator})"
+            )
 
             if not passed:
                 if check.critical:
