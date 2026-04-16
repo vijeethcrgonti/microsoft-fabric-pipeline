@@ -55,7 +55,7 @@ def bronze_orders(spark):
             "PRD-1",
             2,
             Decimal("50.00"),
-            100.00,
+            Decimal("100.00"),
             date(2024, 1, 15),
             "completed",
             datetime(2024, 1, 15, 10, 0),
@@ -67,7 +67,7 @@ def bronze_orders(spark):
             "PRD-1",
             2,
             Decimal("50.00"),
-            100.00,
+            Decimal("100.00"),
             date(2024, 1, 15),
             "completed",
             datetime(2024, 1, 15, 10, 5),
@@ -78,8 +78,8 @@ def bronze_orders(spark):
             "STR-2",
             "PRD-2",
             1,
-            200.00,
-            200.00,
+            Decimal("200.00"),
+            Decimal("200.00"),
             date(2024, 1, 15),
             "pending",
             datetime(2024, 1, 15, 11, 0),
@@ -90,8 +90,8 @@ def bronze_orders(spark):
             "STR-1",
             "PRD-3",
             3,
-            10.00,
-            -30.00,
+            Decimal("10.00"),
+            Decimal("-30.00"),
             date(2024, 1, 15),
             "refunded",
             datetime(2024, 1, 15, 12, 0),
@@ -102,8 +102,8 @@ def bronze_orders(spark):
             "STR-3",
             "PRD-1",
             1,
-            75.00,
-            75.00,
+            Decimal("75.00"),
+            Decimal("75.00"),
             date(2024, 1, 15),
             "  pending  ",
             datetime(2024, 1, 15, 13, 0),
@@ -212,8 +212,8 @@ class TestGoldAggregations:
             ]
         )
         data = [
-            ("O1", date(2024, 1, 15), "South", 100.00, "COMPLETED"),
-            ("O2", date(2024, 1, 15), "South", 200.00, "COMPLETED"),
+            ("O1", date(2024, 1, 15), "South", Decimal("100.00"), "COMPLETED"),
+            ("O2", date(2024, 1, 15), "South", Decimal("200.00"), "COMPLETED"),
             (
                 "O3",
                 date(2024, 1, 15),
@@ -246,8 +246,8 @@ class TestGoldAggregations:
             ]
         )
         data = [
-            ("CUST-1", 6000.00),  # Platinum
-            ("CUST-2", 1500.00),  # Gold
+            ("CUST-1", Decimal("6000.00")),  # Platinum
+            ("CUST-2", Decimal("1500.00")),  # Gold
             ("CUST-3", Decimal("300.00")),  # Silver
             ("CUST-4", Decimal("50.00")),  # Bronze
         ]
